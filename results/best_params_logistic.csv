@@ -1,0 +1,2 @@
+clf__C,clf__max_iter,clf__penalty,clf__solver,feature_sel__select_k__k,feature_sel__select_k__score_func,feature_sel__var_thresh__threshold
+0.01,10000,l2,saga,1000,<function mutual_info_classif at 0x7fb06a902c00>,0.01

@@ -1,0 +1,2 @@
+clf__bootstrap,clf__max_depth,clf__n_estimators,feature_sel__select_k__k,feature_sel__select_k__score_func,feature_sel__var_thresh__threshold
+True,10,100,1000,<function mutual_info_classif at 0x7f1cb8982c00>,0.1
