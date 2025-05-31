@@ -1,0 +1,151 @@
+Methodology Report
+
+---
+
+1. Data Preprocessing & Feature Engineering
+
+Data Cleaning
+1. Missing-Value Treatment:
+   - Replaced infinite values with NaN.
+   - Imputed remaining NaNs using the column median.
+
+2. Duplicate Removal:
+   - Dropped duplicate rows based on the ID column, retaining the first occurrence.
+
+3. Outlier Clipping:
+   - For each numeric feature, computed the 1st and 99th percentiles.
+   - Values below the 1st percentile were set to the 1st percentile; values above the 99th percentile were clipped to the 99th percentile.
+   - This approach preserves the vast majority of genuine variation while reducing the influence of extreme outliers.
+
+Feature Selection & Engineering
+1. Variance Thresholding:
+   - Applied a VarianceThreshold to remove features whose variance fell below a small threshold (e.g. 1 × 10⁻⁴). This eliminates near-constant columns that add no predictive power.
+
+2. Univariate Feature Scoring (SelectKBest):
+   - Used two scoring functions in grid search:
+     - ANOVA F-test (f_classif)
+     - Mutual Information (mutual_info_classif)
+   - The grid search chose among {500, 1 000, 1 500, all} top features, ranked by each score.
+   - This step reduced the original feature space (often thousands of columns) to a manageable subset (≤2000) before model fitting.
+
+No additional handcrafted features (e.g., polynomial interactions) were used in this baseline; all features remained in their original numeric form 
+because the use of polynomial features made the model took huge amount of time for training without any noticable change in accuracy.
+
+---
+
+2. Model Architectures & Key Hyperparameters
+
+For each of the three classifiers—Logistic Regression, Random Forest, and XGBoost—the following pipeline was used:
+
+Input Data → Imputation → Standard Scaling → VarianceThreshold → SelectKBest → Classifier
+
+1. Logistic Regression (sklearn.linear_model.LogisticRegression)
+   - Penalty: L₂ (ridge) regularization.
+   - Solver: Grid-searched over ['lbfgs', 'saga'].
+   - Regularization Strength (C): Grid-searched over {0.01, 0.1, 1, 10}.
+   - Max Iterations: Set to 10 000 to ensure convergence.
+
+2. Random Forest (sklearn.ensemble.RandomForestClassifier)
+   - Number of Trees (n_estimators): {100, 200, 500}
+   - Maximum Depth (max_depth): {None, 10, 20}
+   - Minimum Samples to Split (min_samples_split): {2, 5}
+   - Minimum Samples per Leaf (min_samples_leaf): {1, 2}
+   - Bootstrap: {True, False}
+   - Criterion: Gini impurity (default).
+
+3. XGBoost (xgboost.XGBClassifier)
+   - Number of Trees (n_estimators): {100, 200, 500}
+   - Maximum Depth (max_depth): {3, 6}
+   - Learning Rate (learning_rate): {0.01, 0.1}
+   - Subsample Ratio: {1.0}
+   - Column Subsampling (colsample_bytree): {1.0}
+
+
+---
+
+3. Cross-Validation Scheme
+
+1. Training/Validation Split
+   - Held out 10% of the cleaned data as a validation set.
+   - 90% of the data was used for training.
+
+2. GridSearchCV
+   - Folds: 3-fold cross-validation on the 90% training portion.
+   - Scoring: Primary scoring metric was AUROC (area under the ROC curve).
+   - Parallelization: n_jobs=1 (single-threaded) to ensure reproducibility; parallel runs can be enabled if desired.
+   - After Cross validation, the best hyperparameters were used to evaluation on test set.
+
+3. Test Set
+   - After hyperparameter selection, each model was retrained on the full 100% of train_set.csv  with the chosen hyperparameters.
+   - Metrics were then computed on 100% of the test_set.csv.
+
+4. Blinded Predictions
+   - Finally, each model generated class labels on blinded_test_set.csv.
+   - These predictions were saved for downstream evaluation or submission.
+
+---
+
+4. Experimental Results
+
+Model               | Accuracy | AUROC | Sensitivity (Recall on CLASS=1) | Specificity (Recall on CLASS=0) | F1-score
+--------------------|:--------:|:-----:|:-------------------------------:|:-------------------------------:|:--------:
+Logistic Regression |   0.64   |  0.68 |             0.380               |             0.820               |   0.47
+Random Forest       |   0.66   | 0.681 |             0.357               |             0.870               | 0.46875
+XGBoost             |   0.65   | 0.661 |             0.420               |             0.810               |   0.507
+
+Definitions:
+- Accuracy = (TP + TN) / (TP + TN + FP + FN)
+- AUROC = Area under the ROC curve (probability-rank separation)
+- Sensitivity = TP / (TP + FN)
+- Specificity = TN / (TN + FP)
+- F1-score = 2 × (Precision × Recall) / (Precision + Recall)
+
+---
+
+5. Discussion
+
+5.1 Strengths
+
+- Logistic Regression:
+  - Interpretability: Coefficients can be inspected to understand feature importance.
+  - Baseline Performance: Achieved a respectable AUROC (0.68) given purely linear decision boundaries.
+
+- Random Forest:
+  - Robustness to Noise/Outliers: Individual trees are relatively insensitive to extreme values after clipping and median-imputation.
+  - Nonlinear Modeling: Trees can capture interactions and nonlinear splits not possible with logistic regression.
+  - Feature Importance: Provides built-in estimates of feature-importance via Gini impurity reduction.
+
+- XGBoost:
+  - Gradient Boosting: Sequential boosting of weak learners often outperforms individual trees or bagged ensembles.
+  - Regularization & Subsampling: In-built L₁/L₂ regularization and column/row subsampling help prevent overfitting.
+
+---
+
+5.2 Limitations
+
+- Feature Representation:
+  - Only univariate selection (F-test or mutual information) was used; no interaction or higher-order features were created.
+  - Categorical variables (if any) were not explicitly one-hot encoded—assuming all features were numeric. Any latent nonlinearity may be under-captured by logistic regression.
+
+- Hyperparameter Search Space:
+  - Although grids were relatively broad, the final metrics indicate marginal gains from more complex models; the grid could have been expanded (e.g., deeper trees, more learning rates) or refined via Bayesian optimization for better tuning.
+  - XGBoost’s full grid (n_estimators = 500, learning_rate = 0.01, etc.) was curtailed for computational reasons, possibly leaving better hyperparameter settings unexplored.
+
+- Limited Cross-Validation:
+  - A simple 3-fold CV was used. With more time, nested CV or stratified 5- or 10-fold CV might produce more stable estimates of generalization performance.
+
+---
+
+6. Improvement ideas
+
+a. Enhanced Feature Engineering:
+   - Polynomial & Interaction Terms:
+     - Introduce second-order (or third-order) interaction features (e.g., PolynomialFeatures(degree=2, interaction_only=True)).
+   - Dimensionality Reduction:
+     - Experiment with unsupervised techniques (e.g., PCA, autoencoders) to capture latent structure while reducing noise.
+
+b. Advanced Hyperparameter Optimization:
+   - Bayesian Optimization (e.g., skopt or Optuna):
+     - More efficiently search continuous hyperparameter spaces (learning rates, regularization strengths).
+   - Nested Cross-Validation:
+     - Use an outer 5-fold split for performance estimation and an inner 3-fold for grid search to reduce selection bias.
