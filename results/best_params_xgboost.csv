@@ -1,0 +1,2 @@
+clf__colsample_bytree,clf__learning_rate,clf__max_depth,clf__n_estimators,clf__subsample,feature_sel__select_k__k,feature_sel__select_k__score_func,feature_sel__var_thresh__threshold
+1.0,0.1,6,100,1.0,1000,<function f_classif at 0x7f09f1d702c0>,0.0001
